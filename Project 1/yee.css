@@ -1,0 +1,42 @@
+.main {
+	max-width: 70%;
+	margin-left: auto;
+	margin-right: auto;
+}
+.row td {
+	padding: 8px;
+	border: 1px;
+}
+.row:hover {
+    background-color: #c3e38e;
+}
+.page {
+    background-color: #effed8;
+    border: none;
+	color: inherit;
+	display: inline-block;
+	margin: 2%;
+	padding: 10px 1% 10px 1%;
+    text-align: center;
+    text-decoration: none;
+	width: 3%;
+}
+input[type=text] {
+    padding:5px;
+    border:2px solid #ccc;
+    -webkit-border-radius: 5px;
+    border-radius: 5px;
+}
+
+input[type=text]:focus {
+    border-color:#333;
+}
+
+input[type=submit] {
+    padding:5px 15px;
+    background:#ccc;
+    border:0 none;
+    cursor:pointer;
+    -webkit-border-radius: 5px;
+    border-radius: 5px;
+}
