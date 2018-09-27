@@ -36,3 +36,13 @@ At the bottom of the page, there are 10 buttons linked to the first page, nearby
 ## Code
 
 [https://github.com/Superdanby/Search-Engine/tree/master/Project%201](https://github.com/Superdanby/Search-Engine/tree/master/Project%201)
+
+## Screenshots
+
+![all fornt](./all_front.png =300x)
+
+![all bottom](./all_bottom.png =300x)
+
+![search fornt](./search_front.png =300x)
+
+![search bottom](./search_bottom.png =300x)
