@@ -17,7 +17,6 @@
 #include <pthread.h>
 
 const int Max_files = 256;
-const int max_length = 100000;
 const wchar_t start = 0x4E00;
 const wchar_t stop = 0x9FBB;
 
@@ -120,10 +119,11 @@ int cmp (const void * a, const void * b)
 	    else {
 			ovector = pcre2_get_ovector_pointer(args.p_match_data);
 
-			assert(strlen(slima) > ovector[1]);
-			tema = (wchar_t*)malloc(max_length);
-			memset(tema, 0, max_length);
-			if(swprintf(tema, max_length / sizeof(wchar_t) - 1, L"%hs", slima + ovector[1]) < 0)
+			ull slimlen = strlen(slima);
+			assert(slimlen > ovector[1]);
+			tema = (wchar_t*)malloc((slimlen + 1) * sizeof(wchar_t));
+			tema[0] = L'\0';
+			if(swprintf(tema, slimlen, L"%hs", slima + ovector[1]) < 0)
 			{
 				printf("fail, slimlen: %lu\n", strlen(slima));
 			}
@@ -137,8 +137,11 @@ int cmp (const void * a, const void * b)
 	    else {
 			ovector = pcre2_get_ovector_pointer(args.p_match_data); /* Use ovector to get matched strings */
 
-			temb = (wchar_t*)malloc(max_length);
-			if(swprintf(temb, max_length / sizeof(wchar_t) - 1, L"%hs", slimb + ovector[1]) < 0)
+			ull slimlen = strlen(slimb);
+			assert(slimlen > ovector[1]);
+			temb = (wchar_t*)malloc((slimlen + 1) * sizeof(wchar_t));
+			temb[0] = L'\0';
+			if(swprintf(temb, slimlen, L"%hs", slimb + ovector[1]) < 0)
 			{
 				printf("fail");
 			}
@@ -262,117 +265,132 @@ char* build_path(char* dirname, char* filename)
 	return fullpath;
 }
 
-int get_data (wchar_t **** recordsptr, FILE * inpFile, int * rcnt)
+ull parse_to (wchar_t **** recordsptr, wchar_t * unparsed)
 {
-	ull bcnt = 0; // byte count, limited by memory usage(args.memory)
-	short finish = 1; // inpFile empty = 0, else = 1
-
-	// buffers
-	wchar_t charbuf [2];
-	charbuf[1] = L'\0';
-	wchar_t mystring [max_length + 2]; // record buffer
-	mystring[0] = L'\0';
-
 	// all records
 	wchar_t *** records = (wchar_t ***)malloc(sizeof(wchar_t **));
-	*rcnt = 0;
-	int rsc = 1;
+	ull rcnt = 0, rsc = 1;
+	ll front = 0, back = 0, dlen = wcslen(args.delimiter);
+	// assert(dlen < max_length);
+	while(unparsed[front] != L'\0')
+	{
+		while(back - dlen + 1 < 0 || wcsncmp(unparsed + back - dlen + 1, args.delimiter, dlen) != 0)
+		{
+			if(unparsed[back + 1] == L'\0')
+				break;
+			++back;
+		}
+
+		// build records
+		wchar_t ** strings = (wchar_t **)malloc(sizeof(wchar_t *));
+		ull scnt = 0, ssc = 1;
+
+		// read with unit delimiter
+		ll ufront = front, uback = front, sdlen = wcslen(args.subdel);
+		++back;
+		front = back;
+
+		while(ufront < back)
+		{
+			while(uback - ufront + 1 < sdlen || wcsncmp(unparsed + uback - sdlen + 1, args.subdel, sdlen) != 0)
+			{
+				// printf("record: %d %lc %d\n", uback, mystring[uback], sdlen);
+				if(uback == back - 1)
+					break;
+				++uback;
+			}
+			// build unit
+			wchar_t * unit = malloc((uback - ufront + 2) * sizeof(wchar_t));
+			wcsncpy(unit, unparsed + ufront, uback - ufront + 1);
+			unit[uback - ufront + 1] = L'\0';
+			++uback;
+			ufront = uback;
+			if (scnt == ssc)
+			{
+				ssc <<= 1;
+				// save unit to record
+				strings = (wchar_t **)realloc(strings, ssc * sizeof(wchar_t *));
+			}
+			strings[scnt] = unit;
+			++scnt;
+		}
+
+		strings = (wchar_t **)realloc(strings, (scnt + 1) * sizeof(wchar_t *));
+		strings[scnt] = L"\0";
+
+		if (rcnt == rsc)
+		{
+			rsc <<= 1;
+			// save record to all data
+			records = (wchar_t ***)realloc(records, rsc * sizeof(wchar_t **));
+		}
+		records[rcnt] = strings;
+		++rcnt;
+	}
+	// data processing
+	*recordsptr = records;
+	free(unparsed);
+	return rcnt;
+}
+
+int get_data (wchar_t ** unparsedptr, wchar_t ** buffer, FILE * inpFile)
+{
+	// buffers
+	ull max_length = 10000000;
+	max_length = args.memory / 3 < max_length ? args.memory / 3 : max_length;
+	if(*buffer == 0)
+	{
+		*buffer = (wchar_t *)malloc(max_length * sizeof(wchar_t));
+		*buffer[0] = L'\0';
+	}
+	wchar_t * mystring = (wchar_t *)malloc((max_length + 1) * sizeof(wchar_t));
+	wchar_t * temp = (wchar_t *)malloc((max_length + 1) * sizeof(wchar_t));
+	// wchar_t mystring [max_length + 1]; // record buffer
+	// wchar_t temp [max_length + 1]; // record buffer
+	mystring[0] = L'\0', mystring[max_length] = 0;
+
+	// all records
+	wchar_t * unparsed = (wchar_t *)malloc(args.memory * sizeof(wchar_t));
+	*unparsedptr = unparsed;
+	ull stop = args.memory - max_length * 2 - 2;
+	unparsed[0] = L'\0', unparsed[stop] = L'\0';
+	wcscpy(unparsed, *buffer);
 
 	// data processing
 	if (inpFile != NULL)
 	{
-		// read with record delimiter
 		int go = 1;
-		int back = 0, dlen = wcslen(args.delimiter);
-		while ( go )
+		ll cont = 0, dlen = wcslen(args.delimiter);
+		ll cnt = 0;
+		// assert(dlen < max_length);
+		while(unparsed[stop] == L'\0' && (go = fread(temp, 1, max_length, inpFile)))
 		{
-			charbuf[0] = fgetwc(inpFile);
-			++bcnt;
-			charbuf[1] = L'\0';
-			if ( charbuf[0] == WEOF)
-			{
-				charbuf[0] = L'\0';
-				go = 0;
-				finish = 0;
-			}
-			assert(charbuf[1] == L'\0');
-			mystring[back] = charbuf[0];
-			mystring[back + 1] = L'\0';
-			assert(back < max_length);
-
-			if(back - dlen + 1 < 0 || wcsncmp(mystring + back - dlen + 1, args.delimiter, dlen) != 0)
-			{
-				++back;
-				continue;
-			}
-
-			// stop reading after exceeding memory limit
-			if(bcnt > args.memory)
-				go = 0;
-
-			// build records
-			wchar_t ** strings = (wchar_t **)malloc(sizeof(wchar_t *));
-			int scnt = 0, ssc = 1;
-
-			// read with unit delimiter
-			int ufront = 0, uback = 0, sdlen = wcslen(args.subdel);
-			int sgo = 1;
-			while (sgo)
-			{
-				if (uback - ufront + 1 < sdlen || wcsncmp(mystring + uback - sdlen + 1, args.subdel, sdlen) != 0)
-				{
-					// printf("record: %d %lc %d\n", uback, mystring[uback], sdlen);
-					if(uback < back)
-					{
-						++uback;
-						continue;
-					}
-				}
-
-				// build unit
-				wchar_t * unit = malloc((uback - ufront + 2) * sizeof(wchar_t));
-				wcsncpy(unit, mystring + ufront, uback - ufront + 1);
-				unit[uback - ufront + 1] = L'\0';
-				++uback;
-				if(uback > back)
-				{
-					sgo = 0;
-				}
-				ufront = uback;
-				if (scnt == ssc)
-				{
-					ssc <<= 1;
-					// save unit to record
-					strings = (wchar_t **)realloc(strings, ssc * sizeof(wchar_t *));
-				}
-				strings[scnt] = unit;
-				++scnt;
-			}
-			back = 0;
-			mystring[0] = L'\0';
-
-			strings = (wchar_t **)realloc(strings, (scnt + 1) * sizeof(wchar_t *));
-			strings[scnt] = L"\0";
-
-			if (*rcnt == rsc)
-			{
-				rsc <<= 1;
-				// save record to all data
-				records = (wchar_t ***)realloc(records, rsc * sizeof(wchar_t **));
-			}
-			records[*rcnt] = strings;
-			++(*rcnt);
+			mbstowcs(mystring, temp, go);
+			wcscat(unparsed, mystring);
+			// printf("go: %d, unparsed: %ls\n", go, unparsed);
+			// printf("go: %d, unparsed: %ls\n", go, unparsed);
+			// printf("go: %lld, target =%lld\n", cnt += go, args.memory - max_length - 1);
 		}
+		for(cont = wcslen(mystring) - dlen; go && cont >= 0; cont--)
+		{
+			if(wcsncmp(mystring + cont, args.delimiter, dlen) == 0)
+			{
+				// printf("cont %lld\n", cont);
+				wcsncat(unparsed, mystring, cont + dlen);
+				wcscpy(*buffer, mystring + cont + dlen);
+				break;
+			}
+		}
+		// printf("go: %d, unparsed: %ls\n", go, unparsed);
+		free(mystring);
+		free(temp);
+		return go;
 	}
 	else
 	{
 		printf("Error opening file\n");
 		exit(1);
 	}
-	// printf("%ls\n", records[0][0]);
-	// printf("Finish reading!%d\n", *rcnt);
-	*recordsptr = records;
-	return finish;
 }
 
 int update (wchar_t **** recordptr, int * winner, int idx, int * reccnt, const int empty)
@@ -401,15 +419,17 @@ int update (wchar_t **** recordptr, int * winner, int idx, int * reccnt, const i
 }
 
 typedef struct {
-	wchar_t *** records;
-	int rcnt; // number of records
+	wchar_t * unparsed;
 	int ccnt; // stream count
 } internal_args;
 
 void internal (void * iargs)
 {
-	wchar_t *** records = (wchar_t ***)(((internal_args *)iargs) -> records);
-	int rcnt = (int)(((internal_args *)iargs) -> rcnt);
+
+	wchar_t * unparsed = (wchar_t *)(((internal_args *)iargs) -> unparsed);
+	wchar_t *** records = NULL;
+
+	ull rcnt = parse_to(&records, unparsed);
 	int ccnt = (int)(((internal_args *)iargs) -> ccnt);
 	free(iargs);
 	qsort(records, rcnt, sizeof(wchar_t**), cmp);
@@ -438,7 +458,7 @@ void internal (void * iargs)
 	assert(outFile != 0);
 	assert(rcnt != 0);
 
-	for (int k = 0; k < rcnt; k++)
+	for (ull k = 0; k < rcnt; k++)
 	{
 		assert(records[k][0][0] != L'\0');
 		for (int j = 0; records[k][j][0] != L'\0'; j++)
@@ -530,7 +550,11 @@ void external (void * eargs)
 		free(filename);
 
 		inpFile = fopen (fullpath, "r"); // Do not free fullpath
-		get_data(&recordptr[i], inpFile, recmax + i);
+		wchar_t * unparsed = NULL;
+		wchar_t * filebuffer = NULL;
+		get_data(&unparsed, &filebuffer, inpFile);
+		free(filebuffer);
+		recmax[i] = parse_to(&recordptr[i], unparsed);
 		winner[sdx + i] = i;
 		fclose (inpFile);
 		remove(fullpath);
@@ -614,7 +638,11 @@ void external (void * eargs)
 						free(filename);
 						free(recordptr[winner[0]]);
 						inpFile = fopen (fullpath, "r"); // Do not free fullpath
-						get_data(&recordptr[winner[0]], inpFile, recmax + winner[0]);
+						wchar_t * unparsed = NULL;
+						wchar_t * filebuffer = NULL;
+						get_data(&unparsed, &filebuffer, inpFile);
+						free(filebuffer);
+						recmax[winner[0]] = parse_to(&recordptr[winner[0]], unparsed);
 						printf("got %d records from: %s\n", recmax[winner[0]], fullpath);
 						reccnt[winner[0]] = 0;
 						fclose (inpFile);
@@ -769,7 +797,7 @@ int main(int argc, char** argv)
 	args.filedigit += 2;
 	ull memsplit = args.threads > sysconf(_SC_NPROCESSORS_ONLN) ? sysconf(_SC_NPROCESSORS_ONLN) : args.threads;
 	args.memory /= sizeof(wchar_t) * memsplit;
-	args.chunk = (args.memory * args.memory * memsplit / args.ulimit );
+	args.chunk = (args.memory * args.memory * memsplit / args.ulimit ) / 2;
 	args.chunk = args.chunk > args.memory ? args.memory : args.chunk;
 	ull folder_max = args.ulimit / args.memory;
 	args.zero = 1;
@@ -794,12 +822,14 @@ int main(int argc, char** argv)
 		printf("%d\n", i);
 		printf("file: %s\n", files[i]);
 		inpFile = fopen (files[i], "r"); // Do not free fullpath
+		wchar_t * filebuffer = NULL; // hold data between memory limits in the same file, should initialize with NULL
 		int go = 1;
 		while(go)
 		{
 			internal_args* iargs = (internal_args*)malloc(sizeof(internal_args));
 			iargs -> ccnt = ccnt++;
-			go = get_data(&(iargs -> records), inpFile, &(iargs -> rcnt));
+			iargs -> unparsed = NULL;
+			go = get_data(&(iargs -> unparsed), &filebuffer, inpFile);
 			while(!pcnt)
 			{
 				while(1)
@@ -819,6 +849,7 @@ int main(int argc, char** argv)
 			pthread_create(thread + thread_token++, NULL, (void *)(internal), (void *)iargs);
 			thread_max = thread_max > thread_token ? thread_max : thread_token;
 		}
+		free(filebuffer);
 		printf("Finished reading file: %s\n", files[i]);
 		fclose (inpFile);
 
