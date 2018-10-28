@@ -53,8 +53,8 @@ arguments args = {L"\n", NULL, 0, 0, NULL, NULL, NULL, 0, 0, 0, 4000000000, 1, 0
 
 int cmp (const void * a, const void * b)
 {
-	int ret = args.reverse == 1 ? 1 : 0; // increasing
-	int rev = 1 - ret; // decreasing
+	int ret = args.reverse == 1 ? 1 : -1; // increasing
+	int rev = ret * (-1); // decreasing
 	wchar_t** reca = *(wchar_t ***)a;
 	wchar_t** recb = *(wchar_t ***)b;
 	int idxa = 0, idxb = 0;
@@ -128,6 +128,7 @@ int cmp (const void * a, const void * b)
 				printf("fail, slimlen: %lu\n", strlen(slima));
 			}
 			loca = tema;
+			lena = wcslen(loca);
 	    }
 
 		value = (PCRE2_SPTR)slimb;
@@ -146,6 +147,7 @@ int cmp (const void * a, const void * b)
 				printf("fail");
 			}
 			locb = temb;
+			lenb = wcslen(locb);
 	    }
 		free(slima);
 		free(slimb);
@@ -154,10 +156,7 @@ int cmp (const void * a, const void * b)
 	// size
 	if(args.size)
 	{
-		if(lena < lenb)
-			return ret;
-		else if(lenb < lena)
-			return rev;
+		return lena - lenb;
 	}
 
 	// numerical
@@ -203,6 +202,7 @@ int cmp (const void * a, const void * b)
 				locb[i] = L'0';
 			locb[difference] = L'\0';
 			wcscat(locb, loc);
+			lenb = wcslen(locb);
 		}
 
 		if(nub > nua)
@@ -213,6 +213,7 @@ int cmp (const void * a, const void * b)
 				loca[i] = L'0';
 			loca[difference] = L'\0';
 			wcscat(loca, loc);
+			lena = wcslen(loca);
 		}
 	}
 
@@ -221,26 +222,30 @@ int cmp (const void * a, const void * b)
 	wchar_t candia;
 	wchar_t candib;
 
+	return wcscmp(loca, locb);
+
 	for (int i = 0; i < len; i++)
 	{
 		candia = args.casei == 1 ? towlower(loca[i]) : loca[i];
 		candib = args.casei == 1 ? towlower(locb[i]) : locb[i];
-		if((ll)candia != (ll)candib && tema != NULL)
+		if((ll)candia != (ll)candib)
 		{
-			free(tema);
-			free(temb);
+			if(tema != NULL)
+				free(tema);
+			if(temb != NULL)
+				free(temb);
 		}
-		if((ll)candia - (ll)candib < 0)
+		if((ll)candia < (ll)candib)
 			return ret;
-		else if((ll)candia - (ll)candib > 0)
+		if((ll)candia > (ll)candib)
 			return rev;
 	}
-	ll localen = wcslen(loca);
-	free(tema);
-	free(temb);
-	if ((ll)len == localen)
-		return ret;
-	return rev;
+	// printf("a %ls, %d\nb %ls, %d\nend\n", reca[idxa], lena, recb[idxb], lenb);
+	if(tema != NULL)
+		free(tema);
+	if(temb != NULL)
+		free(temb);
+	return (lena - lenb) * rev;
 }
 
 char* build_name(int num, int length)
@@ -270,15 +275,15 @@ ull parse_to (wchar_t **** recordsptr, wchar_t * unparsed)
 	// all records
 	wchar_t *** records = (wchar_t ***)malloc(sizeof(wchar_t **));
 	ull rcnt = 0, rsc = 1;
-	ll front = 0, back = 0, dlen = wcslen(args.delimiter);
+	ll front = 0, end = 1, dlen = wcslen(args.delimiter);
 	// assert(dlen < max_length);
 	while(unparsed[front] != L'\0')
 	{
-		while(back - dlen + 1 < 0 || wcsncmp(unparsed + back - dlen + 1, args.delimiter, dlen) != 0)
+		while(end - front < dlen || wcsncmp(unparsed + end - dlen, args.delimiter, dlen) != 0)
 		{
-			if(unparsed[back + 1] == L'\0')
+			if(unparsed[end] == L'\0')
 				break;
-			++back;
+			++end;
 		}
 
 		// build records
@@ -286,25 +291,23 @@ ull parse_to (wchar_t **** recordsptr, wchar_t * unparsed)
 		ull scnt = 0, ssc = 1;
 
 		// read with unit delimiter
-		ll ufront = front, uback = front, sdlen = wcslen(args.subdel);
-		++back;
-		front = back;
+		ll ufront = front, uend = front, sdlen = wcslen(args.subdel);
+		front = end;
 
-		while(ufront < back)
+		while(ufront < end)
 		{
-			while(uback - ufront + 1 < sdlen || wcsncmp(unparsed + uback - sdlen + 1, args.subdel, sdlen) != 0)
+			while(uend - ufront < sdlen || wcsncmp(unparsed + uend - sdlen, args.subdel, sdlen) != 0)
 			{
 				// printf("record: %d %lc %d\n", uback, mystring[uback], sdlen);
-				if(uback == back - 1)
+				if(uend == end)
 					break;
-				++uback;
+				++uend;
 			}
 			// build unit
-			wchar_t * unit = malloc((uback - ufront + 2) * sizeof(wchar_t));
-			wcsncpy(unit, unparsed + ufront, uback - ufront + 1);
-			unit[uback - ufront + 1] = L'\0';
-			++uback;
-			ufront = uback;
+			wchar_t * unit = malloc((uend - ufront + 1) * sizeof(wchar_t));
+			wcsncpy(unit, unparsed + ufront, uend - ufront);
+			unit[uend - ufront] = L'\0';
+			ufront = uend;
 			if (scnt == ssc)
 			{
 				ssc <<= 1;
@@ -312,6 +315,7 @@ ull parse_to (wchar_t **** recordsptr, wchar_t * unparsed)
 				strings = (wchar_t **)realloc(strings, ssc * sizeof(wchar_t *));
 			}
 			strings[scnt] = unit;
+			// printf("scnt: %llu\n", scnt);
 			++scnt;
 		}
 
@@ -343,11 +347,11 @@ int get_data (wchar_t ** unparsedptr, wchar_t ** buffer, FILE * inpFile)
 		*buffer = (wchar_t *)malloc(max_length * sizeof(wchar_t));
 		*buffer[0] = L'\0';
 	}
-	wchar_t * mystring = (wchar_t *)malloc((max_length + 1) * sizeof(wchar_t));
-	wchar_t * temp = (wchar_t *)malloc((max_length + 1) * sizeof(wchar_t));
+	// wchar_t * mystring = (wchar_t *)malloc((max_length + 1) * sizeof(wchar_t));
+	// wchar_t * temp = (wchar_t *)malloc((max_length + 1) * sizeof(wchar_t));
 	// wchar_t mystring [max_length + 1]; // record buffer
 	// wchar_t temp [max_length + 1]; // record buffer
-	mystring[0] = L'\0', mystring[max_length] = 0;
+	// mystring[0] = L'\0', mystring[max_length] = 0;
 
 	// all records
 	wchar_t * unparsed = (wchar_t *)malloc(args.memory * sizeof(wchar_t));
@@ -359,32 +363,38 @@ int get_data (wchar_t ** unparsedptr, wchar_t ** buffer, FILE * inpFile)
 	// data processing
 	if (inpFile != NULL)
 	{
-		int go = 1;
-		ll cont = 0, dlen = wcslen(args.delimiter);
+		// int go = 1;
+		ll dlen = wcslen(args.delimiter);
 		ll cnt = 0;
 		// assert(dlen < max_length);
-		while(unparsed[stop] == L'\0' && (go = fread(temp, 1, max_length, inpFile)))
+		wchar_t * mystring = unparsed;
+		while(unparsed[stop] == L'\0' && (mystring = fgetws(mystring, max_length, inpFile)) != NULL)
 		{
-			mbstowcs(mystring, temp, go);
-			wcscat(unparsed, mystring);
+			// mbstowcs(mystring, temp, go);
+			// wcscat(unparsed, mystring);
+			// printf("go: %d, unparsed: %ls", go, unparsed);
 			// printf("go: %d, unparsed: %ls\n", go, unparsed);
-			// printf("go: %d, unparsed: %ls\n", go, unparsed);
-			// printf("go: %lld, target =%lld\n", cnt += go, args.memory - max_length - 1);
+			// printf("cnt: %lld, target =%lld\n", cnt += wcslen(mystring), stop);
+			mystring += wcslen(mystring);
 		}
-		for(cont = wcslen(mystring) - dlen; go && cont >= 0; cont--)
+		// printf("go: %d, unparsed: %ls", go, unparsed);
+		if(mystring == NULL)
+			return 0;
+		for(wchar_t * trace = mystring - dlen; trace != unparsed; trace--)
 		{
-			if(wcsncmp(mystring + cont, args.delimiter, dlen) == 0)
+			if(wcsncmp(trace, args.delimiter, dlen) == 0)
 			{
 				// printf("cont %lld\n", cont);
-				wcsncat(unparsed, mystring, cont + dlen);
-				wcscpy(*buffer, mystring + cont + dlen);
+				wcscpy(*buffer, trace);
+				*trace = L'\0';
+				// wcsncat(unparsed, mystring, cont + dlen);
 				break;
 			}
 		}
 		// printf("go: %d, unparsed: %ls\n", go, unparsed);
-		free(mystring);
-		free(temp);
-		return go;
+		// free(mystring);
+		// free(temp);
+		return 1;
 	}
 	else
 	{
@@ -407,7 +417,7 @@ int update (wchar_t **** recordptr, int * winner, int idx, int * reccnt, const i
 			winner[pdx] = winner[ldx];
 		else
 		{
-			if(!cmp(&(recordptr[winner[ldx]][reccnt[winner[ldx]]]), &(recordptr[winner[rdx]][reccnt[winner[rdx]]])))
+			if(cmp(&(recordptr[winner[ldx]][reccnt[winner[ldx]]]), &(recordptr[winner[rdx]][reccnt[winner[rdx]]])) <= 0)
 				winner[pdx] = winner[ldx];
 			else
 				winner[pdx] = winner[rdx];
@@ -460,6 +470,7 @@ void internal (void * iargs)
 
 	for (ull k = 0; k < rcnt; k++)
 	{
+		// printf("k %llu, rcnt %llu\n", k, rcnt);
 		assert(records[k][0][0] != L'\0');
 		for (int j = 0; records[k][j][0] != L'\0'; j++)
 		{
@@ -467,6 +478,7 @@ void internal (void * iargs)
 			fprintf (outFile, "%ls", records[k][j]);
 			free(records[k][j]);
 		}
+		// printf("bcnt %llu, chunk %llu\n", bcnt, args.chunk);
 		assert(bcnt != 0);
 		free(records[k]);
 		if (bcnt >= args.chunk)
@@ -531,6 +543,7 @@ void external (void * eargs)
 	// file I/O
 	FILE * inpFile = NULL;
 	FILE * outFile = NULL;
+	// FILE * testout = fopen("test1", "w");
 
 	// initialize the winner tree
 	for(int i = 0; i < ccnt; i++)
@@ -555,6 +568,17 @@ void external (void * eargs)
 		get_data(&unparsed, &filebuffer, inpFile);
 		free(filebuffer);
 		recmax[i] = parse_to(&recordptr[i], unparsed);
+		// for (ull k = 0; k < recmax[i]; k++)
+		// {
+		// 	assert(recordptr[i][k][0][0] != L'\0');
+		// 	for (int j = 0; recordptr[i][k][j][0] != L'\0'; j++)
+		// 	{
+		// 		bcnt += wcslen(recordptr[i][k][j]);
+		// 		fprintf (testout, "%ls", recordptr[i][k][j]);
+		// 		free(recordptr[i][k][j]);
+		// 	}
+		// 	free(recordptr[i][k]);
+		// }
 		winner[sdx + i] = i;
 		fclose (inpFile);
 		remove(fullpath);
@@ -618,8 +642,10 @@ void external (void * eargs)
 		}
 
 		// check if stream winner[0] is empty
+		// printf("%d %d\n", reccnt[winner[0]], recmax[winner[0]]);
 		if(++reccnt[winner[0]] == recmax[winner[0]])
 		{
+			printf("stream %d Finished\n", winner[0]);
 			// check if no chunks available
 			DIR *dir = NULL;
 			struct dirent *ent = NULL;
@@ -797,8 +823,9 @@ int main(int argc, char** argv)
 	args.filedigit += 2;
 	ull memsplit = args.threads > sysconf(_SC_NPROCESSORS_ONLN) ? sysconf(_SC_NPROCESSORS_ONLN) : args.threads;
 	args.memory /= sizeof(wchar_t) * memsplit;
-	args.chunk = (args.memory * args.memory * memsplit / args.ulimit ) / 2;
+	args.chunk = (args.memory * args.memory * memsplit / args.ulimit );
 	args.chunk = args.chunk > args.memory ? args.memory : args.chunk;
+	// args.chunk >>= 1;
 	ull folder_max = args.ulimit / args.memory;
 	args.zero = 1;
 	while(folder_max /= 10)
