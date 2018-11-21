@@ -156,7 +156,7 @@ int cmp (const void * a, const void * b)
 	// size
 	if(args.size)
 	{
-		return lena - lenb;
+		return (lena - lenb) * rev;
 	}
 
 	// numerical
@@ -164,35 +164,16 @@ int cmp (const void * a, const void * b)
 	{
 		int nua = 0, nub = 0;
 
-	    PCRE2_SIZE *ovector;
-	    int rc;
-		char* slima = (char*) malloc((wcslen(reca[idxa]) + 1)* sizeof(wchar_t));
-		sprintf(slima, "%ls", reca[idxa] );
-		char* slimb = (char*) malloc((wcslen(recb[idxb]) + 1)* sizeof(wchar_t));
-		sprintf(slimb, "%ls", recb[idxb] );
-	    PCRE2_SPTR value = slima;
-	    rc = pcre2_match(args.n_re, value, -1, 0, 0, args.n_match_data, NULL);
-	    if (rc > 0)
+		for(wchar_t * a = reca[idxa]; *a != L'\0'; a++, nua++)
 		{
-			ovector = pcre2_get_ovector_pointer(args.n_match_data); /* Use ovector to get matched strings */
-
-			PCRE2_SIZE slen = ovector[1] - ovector[0];
-			nua = slen;
-
+			if(*a < L'0' || *a > L'9')
+				break;
 		}
-
-		value = slimb;
-	    rc = pcre2_match(args.n_re, value, -1, 0, 0, args.n_match_data, NULL);
-	    if (rc > 0)
+		for(wchar_t * b = recb[idxb]; *b != L'\0'; b++, nub++)
 		{
-			ovector = pcre2_get_ovector_pointer(args.n_match_data); /* Use ovector to get matched strings */
-
-			PCRE2_SIZE slen = ovector[1] - ovector[0];
-			nub = slen;
-
+			if(*b < L'0' || *b > L'9')
+				break;
 		}
-		free(slima);
-		free(slimb);
 		int difference = nua > nub ? nua - nub : nub - nua;
 		if(nua > nub)
 		{
@@ -222,23 +203,28 @@ int cmp (const void * a, const void * b)
 	wchar_t candia;
 	wchar_t candib;
 
-	return wcscmp(loca, locb);
+	// return wcscmp(loca, locb) * rev;
 
 	for (int i = 0; i < len; i++)
 	{
-		candia = args.casei == 1 ? towlower(loca[i]) : loca[i];
-		candib = args.casei == 1 ? towlower(locb[i]) : locb[i];
-		if((ll)candia != (ll)candib)
+		candia = loca[i];
+		candib = locb[i];
+		if(args.casei)
+		{
+			candia = towlower(loca[i]);
+			candib = towlower(locb[i]);
+		}
+		if(candia != candib)
 		{
 			if(tema != NULL)
 				free(tema);
 			if(temb != NULL)
 				free(temb);
+			if(candia < candib)
+				return ret;
+			if(candia > candib)
+				return rev;
 		}
-		if((ll)candia < (ll)candib)
-			return ret;
-		if((ll)candia > (ll)candib)
-			return rev;
 	}
 	// printf("a %ls, %d\nb %ls, %d\nend\n", reca[idxa], lena, recb[idxb], lenb);
 	if(tema != NULL)
@@ -347,11 +333,6 @@ int get_data (wchar_t ** unparsedptr, wchar_t ** buffer, FILE * inpFile)
 		*buffer = (wchar_t *)malloc(max_length * sizeof(wchar_t));
 		*buffer[0] = L'\0';
 	}
-	// wchar_t * mystring = (wchar_t *)malloc((max_length + 1) * sizeof(wchar_t));
-	// wchar_t * temp = (wchar_t *)malloc((max_length + 1) * sizeof(wchar_t));
-	// wchar_t mystring [max_length + 1]; // record buffer
-	// wchar_t temp [max_length + 1]; // record buffer
-	// mystring[0] = L'\0', mystring[max_length] = 0;
 
 	// all records
 	wchar_t * unparsed = (wchar_t *)malloc(args.memory * sizeof(wchar_t));
@@ -365,16 +346,10 @@ int get_data (wchar_t ** unparsedptr, wchar_t ** buffer, FILE * inpFile)
 	{
 		// int go = 1;
 		ll dlen = wcslen(args.delimiter);
-		ll cnt = 0;
 		// assert(dlen < max_length);
 		wchar_t * mystring = unparsed;
 		while(unparsed[stop] == L'\0' && (mystring = fgetws(mystring, max_length, inpFile)) != NULL)
 		{
-			// mbstowcs(mystring, temp, go);
-			// wcscat(unparsed, mystring);
-			// printf("go: %d, unparsed: %ls", go, unparsed);
-			// printf("go: %d, unparsed: %ls\n", go, unparsed);
-			// printf("cnt: %lld, target =%lld\n", cnt += wcslen(mystring), stop);
 			mystring += wcslen(mystring);
 		}
 		// printf("go: %d, unparsed: %ls", go, unparsed);
@@ -384,16 +359,11 @@ int get_data (wchar_t ** unparsedptr, wchar_t ** buffer, FILE * inpFile)
 		{
 			if(wcsncmp(trace, args.delimiter, dlen) == 0)
 			{
-				// printf("cont %lld\n", cont);
 				wcscpy(*buffer, trace);
 				*trace = L'\0';
-				// wcsncat(unparsed, mystring, cont + dlen);
 				break;
 			}
 		}
-		// printf("go: %d, unparsed: %ls\n", go, unparsed);
-		// free(mystring);
-		// free(temp);
 		return 1;
 	}
 	else
@@ -568,17 +538,6 @@ void external (void * eargs)
 		get_data(&unparsed, &filebuffer, inpFile);
 		free(filebuffer);
 		recmax[i] = parse_to(&recordptr[i], unparsed);
-		// for (ull k = 0; k < recmax[i]; k++)
-		// {
-		// 	assert(recordptr[i][k][0][0] != L'\0');
-		// 	for (int j = 0; recordptr[i][k][j][0] != L'\0'; j++)
-		// 	{
-		// 		bcnt += wcslen(recordptr[i][k][j]);
-		// 		fprintf (testout, "%ls", recordptr[i][k][j]);
-		// 		free(recordptr[i][k][j]);
-		// 	}
-		// 	free(recordptr[i][k]);
-		// }
 		winner[sdx + i] = i;
 		fclose (inpFile);
 		remove(fullpath);
