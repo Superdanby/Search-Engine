@@ -26,7 +26,7 @@
 
 ### Test Data
 
-18 Gb Youtube data
+1 GB news records
 
 ## In-memory only
 
