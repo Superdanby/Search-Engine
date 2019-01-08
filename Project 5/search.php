@@ -7,7 +7,7 @@
 <body>
 	<div>
 		<center>
-			<h1>Fuzzy Search</h1>
+			<h1><a href="search.php" id="logo">Fuzzy Search</a></h1>
 			<form method="GET" action="search.php">
 				<input type="text" name="key" value="<?php echo $_GET[key] ?>">
 				<input type="submit" value="Go!">
@@ -18,26 +18,22 @@
 	</div>
 	<?php
 		$source = 'out';
-		$hash_value = hash('sha512', $_GET[key]);
-		// echo $_GET[key];
-		// echo urlencode($_GET[key]);
-		// echo urldecode($_GET[key]);
-		// echo shell_exec('tail -n 1 ' . $source);
-		// echo $hash_value;
-		// echo ($hash_value == shell_exec('tail -n 1 ' . $source));
-		if($hash_value != shell_exec('tail -n 1 ' . $source))
+		$info_file = 'info';
+		$trimmed = shell_exec('echo ' . trim($_GET[key]));
+		$hash_value = hash('sha512', $trimmed);
+		$elapsed = 0;
+		if($hash_value != shell_exec('tail -n 1 ' . $info_file))
 		{
-			$query = './fuzzy_search -s ../ettoday0.rec -s ../ettoday1.rec -s ../ettoday2.rec -s ../ettoday3.rec -s ../ettoday4.rec -s ../ettoday5.rec -o ' . $source . ' ' . $_GET[key];
-			shell_exec($query);
-			file_put_contents($source, $hash_value, FILE_APPEND);
+			$query = './fuzzy_search -s ../etall -o ' . $source . ' ' . $_GET[key];
+			$start = round(microtime(true) * 1000);
+			$total_items = shell_exec($query);
+			$elapsed = (round(microtime(true) * 1000) - $start) / 1000;
+			file_put_contents($info_file, $total_items);
+			file_put_contents($info_file, $hash_value, FILE_APPEND);
 		}
-		// echo $query;
-		// $out = shell_exec($query);
-		// echo $out;
-		// file_put_contents($source, $out);
-
 		# number 1
-		$total_items = shell_exec('tail -n 2 ' . $source . ' | head -n 1');
+		$total_items = shell_exec('head -n 1 ' . $info_file);
+		echo '<div id="info">' . $total_items . 'records, ' . $elapsed . ' seconds elapsed</div>';
 
 		# number 2
 		$perpage = 20;
@@ -55,6 +51,10 @@
 
 		$entries = preg_split('/\n/', trim($out));
 	?>
+	<?php
+		$plus_stripped = preg_replace('/[+-][\s]+/', '', $trimmed);
+		$query_pattern = str_replace(' ', '|', $plus_stripped);
+	?>
 	<center>
 		<table class="main">
 			<tbody>
@@ -62,7 +62,7 @@
 					foreach ($entries as $entry) {
 						echo '<tr class="row">';
 							echo '<td>';
-								echo $entry . '<br />';
+								echo preg_replace('/(' . rtrim($query_pattern) . ')/ui', '<span class="highlight">$1</span>', $entry);
 							echo '</td>';
 						echo '</tr>';
 					}
@@ -89,8 +89,6 @@
 	?>
 	<div style="text-align: center">
 	<?php
-		$query_string = 'key=' . rawurlencode($_GET[key]) . '&page=1';
-		echo '<a href="mycgi?' . htmlentities($query_string) . '">';
 		echo '<a class="page" href="search.php?' . htmlentities('key=' . rawurlencode($_GET[key]) . '&page=1') . '">1</a>';
 		for ($i = $low + 1; $i <= $up - 1; $i++) {
 			echo '<a class="page" href="search.php?' . htmlentities('key=' . rawurlencode($_GET[key]) . '&page=' . $i) . '">' . $i . '</a>';

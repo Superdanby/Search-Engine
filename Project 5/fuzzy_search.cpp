@@ -16,7 +16,7 @@ struct arguments {
 } args;
 
 struct Record {
-	ll score;
+	double score;
 	string title;
 	// string time;
 	string info;
@@ -24,18 +24,77 @@ struct Record {
 	string content;
 };
 
+
+ll boyer_moore(const string &A, const string &B)
+{
+	// Boyer Moore Initialization
+	// bad bmInitocc();
+	unordered_map<char, int> occurred;
+    for (unsigned int i = 0; i < A.size(); i++)
+    {
+        occurred[A[i]] = i;
+    }
+
+    // bmPreprocess1();
+	vector<int> border_front(A.size() + 1);
+	vector<int> shift(A.size() + 1);
+    size_t i = A.size(), j = A.size() + 1;
+    border_front[i] = j;
+    while (i > 0)
+    {
+        while (j <= A.size() && A[i-1] != A[j-1])
+        {
+            if (shift[j] == 0)
+				shift[j] = j - i;
+            j = border_front[j];
+        }
+        // --i, --j;
+        border_front[--i] = --j;
+    }
+
+    // bmPreprocess2();
+	j = border_front[0];
+    for(i = 0; i <= A.size(); i++)
+    {
+        if(shift[i] == 0)
+			shift[i] = j;
+        if(i == j)
+			j = border_front[j];
+    }
+
+	// Boyer Moore Search
+	ll cnt = 0;
+    int Aidx = 0, Bidx;
+    while (Aidx <= int(B.size()) - int(A.size()))
+    {
+        Bidx = A.size() - 1;
+        while(Bidx >= 0 && A[Bidx] == B[Aidx + Bidx])
+			--Bidx;
+        if (Bidx < 0)
+        {
+            ++cnt;
+            Aidx += shift[0];
+        }
+        else
+            Aidx += max((shift[Bidx + 1]), Bidx - (occurred.find(B[Aidx + Bidx]) != occurred.end() ? occurred[B[Aidx + Bidx]] : -1));
+    }
+	return cnt;
+}
+
 inline ll hit_score(const string &A, const string &B, const int &tolerance)
 {
+	if(tolerance == 0)
+		return boyer_moore(A, B);
 	// cerr << A << "\t" << B  << "\n";
 	vector<int> table(A.size() + 1);
 
-	for(int i = 0; i <= A.size(); i++)
+	for(size_t i = 0; i <= A.size(); i++)
 		table[i] = i;
 
-	ll score = 0;
+	double score = 0;
 
 	int ubound = min((int)table.size(), tolerance + 2);
-	for(int j = 0; j < B.size(); j++)
+	for(size_t j = 0; j < B.size(); j++)
 	{
 		for(int i = 1; i < ubound; i++)
 		{
@@ -46,13 +105,15 @@ inline ll hit_score(const string &A, const string &B, const int &tolerance)
 		table[0] = 0;
 		while(table[--ubound] > tolerance);
 		ubound = min((int)table.size(), ubound + 2);
-		score += table.back() <= tolerance ? tolerance - table.back() + 1 : 0;
+		score += table.back() <= tolerance ? double(tolerance - table.back() + 1) / double(table.back() + 1) : 0;
 	}
 	return score;
 }
 
 void parse_to (vector<Record> &parsed, const string &unparsed, const int start, const int end, vector<string> &must, vector<string> &prefer, vector<string> &exclude)
 {
+	if(exclude.empty() && must.empty() && prefer.empty())
+		return;
 	// all records
 	int idx = start;
 	while(idx < end)
@@ -78,29 +139,31 @@ void parse_to (vector<Record> &parsed, const string &unparsed, const int start, 
 			continue;
 		for(auto x: must)
 		{
-			inp.score += hit_score(x, inp.title, 0) * 100;
-			inp.score += hit_score(x, inp.content, 0) * 20;
+			double must_score = hit_score(x, inp.title, 0) * 100;
+			must_score += hit_score(x, inp.content, 0) * 20;
+			if(must_score)
+				inp.score += must_score;
+			else
+			{
+				inp.score = 0;
+				break;
+			}
 		}
 		if(must.size() && !inp.score)
 			continue;
 		for(auto x: prefer)
 		{
-			inp.score += hit_score(x, inp.title, 2) * 5;
-			inp.score += hit_score(x, inp.content, 2);
+			int tolerance = x.size() < 9 ? 1 : 2;
+			tolerance = x.size() < 5 ? 0 : tolerance;
+			inp.score += hit_score(x, inp.title, tolerance) * 5;
+			inp.score += hit_score(x, inp.content, tolerance);
 		}
+		if(!inp.score)
+			continue;
 		// cerr << inp.score << "\n";
 		parsed.emplace_back(inp);
 	}
 	return;
-}
-
-bool cmp(const Record &A, const Record &B)
-{
-	return A.score > B.score;
-}
-void test(int a, int &b)
-{
-	cout << a << b << "\n";
 }
 
 int main(int argc, char ** argv) {
@@ -167,11 +230,12 @@ int main(int argc, char ** argv) {
 	for(auto x: all)
 	{
 		// cout << "<h3><a href=\"" << x.url << "\">" << x.title << "</a></h3><br/><div align=\"right\">Score: " << x.score << "</div><br/><p>" << x.content << "</p><br/>\n";
-		int strend = 1001;
-		while((unsigned int)x.content[--strend] >= 128 && (unsigned int)x.content[strend] < 192);
-		ofs << "<h3><a href=\"" << x.url << "\">" << x.title << "</a></h3><div align=\"right\">Score: " << x.score << "</div><p>" << x.content.substr(0, strend) << "</p><br/>\n";
+		// int strend = 500;
+		// while((unsigned char)x.content[--strend] >= 128 && (unsigned char)x.content[strend] < 192);
+		ofs << "<h3><a href=\"" << x.url << "\">" << x.title << "</a></h3><div align=\"right\">Score: " << x.score << "</div><p>" << x.content << "</p>\n";
+		// ofs << "<h3><a href=\"" << x.url << "\">" << x.title << "</a></h3><div align=\"right\">Score: " << x.score << "</div><p>" << x.content.substr(0, strend) << "</p>\n";
 	}
-	ofs << all.size() << "\n";
+	cout << all.size() << "\n";
 	// cout << all.size() << "\n\n";
 	return 0;
 }

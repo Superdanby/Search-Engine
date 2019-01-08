@@ -1,0 +1,81 @@
+.main {
+	max-width: 70%;
+	margin-left: auto;
+	margin-right: auto;
+}
+
+#logo {
+	text-decoration: none;
+	color: white;
+}
+
+#info {
+	color: chartreuse;
+	text-align: right;
+}
+
+h3 {
+	margin-bottom: 0px;
+}
+
+h3 a{
+	text-decoration: none;
+}
+
+.row td {
+	padding: 8px;
+	border: 1px;
+}
+
+.row td p{
+	margin-top: 0px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	display: -webkit-box;
+	line-height: 24px;     /* fallback */
+	max-height: 120px;      /* fallback */
+	-webkit-line-clamp: 5; /* number of lines to show */
+	-webkit-box-orient: vertical;
+}
+
+.row:hover {
+    background-color: #e0f2c3;
+}
+
+.page {
+    background-color: #e0f2c3;
+    border: none;
+	color: inherit;
+	display: inline-block;
+	margin: 2%;
+	padding: 10px 1% 10px 1%;
+    text-align: center;
+    text-decoration: none;
+	width: 3%;
+}
+
+input[type=text] {
+    padding:5px;
+    border:2px solid #ccc;
+    -webkit-border-radius: 5px;
+    border-radius: 5px;
+}
+
+input[type=text]:focus {
+    border-color:#333;
+}
+
+input[type=submit] {
+    padding:5px 15px;
+    background:#ccc;
+    border:0 none;
+    cursor:pointer;
+    -webkit-border-radius: 5px;
+    border-radius: 5px;
+}
+
+.highlight {
+	color: darkviolet;
+	font-size: large;
+	font-weight: bold;
+}
