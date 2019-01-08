@@ -48,7 +48,6 @@ ll boyer_moore(const string &A, const string &B)
 				shift[j] = j - i;
             j = border_front[j];
         }
-        // --i, --j;
         border_front[--i] = --j;
     }
 
@@ -85,7 +84,6 @@ inline ll hit_score(const string &A, const string &B, const int &tolerance)
 {
 	if(tolerance == 0)
 		return boyer_moore(A, B);
-	// cerr << A << "\t" << B  << "\n";
 	vector<int> table(A.size() + 1);
 
 	for(size_t i = 0; i <= A.size(); i++)
@@ -160,7 +158,6 @@ void parse_to (vector<Record> &parsed, const string &unparsed, const int start, 
 		}
 		if(!inp.score)
 			continue;
-		// cerr << inp.score << "\n";
 		parsed.emplace_back(inp);
 	}
 	return;
@@ -195,9 +192,7 @@ int main(int argc, char ** argv) {
 		ifs.open(inp_name, ifstream::in);
 		string buffer;
 		stringstream buf;
-		// cerr << "start reading\n";
 		buf << ifs.rdbuf();
-		// cerr << "read\n";
 		// Number of threads available
 		unsigned int nthreads = max(thread::hardware_concurrency() - 1, (unsigned int)1);
 		vector<vector<Record>> parsed(nthreads);
@@ -209,7 +204,6 @@ int main(int argc, char ** argv) {
 			endidx = unparsed.find(args.url, idx + unit_len);
 			vector<Record> &parsed_ref = parsed[i];
 			threads[i] = thread(parse_to, ref(parsed_ref), ref(unparsed), idx, endidx, ref(must), ref(prefer), ref(exclude));
-			// threads[i] = thread(test, 1, std::ref(3));
 			idx = endidx + 1;
 		}
 		vector<Record> &parsed_back = parsed.back();
@@ -220,7 +214,6 @@ int main(int argc, char ** argv) {
 		// 	x.join();
 		for (auto x: parsed)
 			all.insert(all.end(), make_move_iterator(x.begin()), make_move_iterator(x.end()));
-		// cerr << "parsed\n";
 		ifs.close();
 	}
 	sort(all.begin(), all.end(), [](const Record &A, const Record &B){return A.score > B.score;});
@@ -229,13 +222,8 @@ int main(int argc, char ** argv) {
 
 	for(auto x: all)
 	{
-		// cout << "<h3><a href=\"" << x.url << "\">" << x.title << "</a></h3><br/><div align=\"right\">Score: " << x.score << "</div><br/><p>" << x.content << "</p><br/>\n";
-		// int strend = 500;
-		// while((unsigned char)x.content[--strend] >= 128 && (unsigned char)x.content[strend] < 192);
 		ofs << "<h3><a href=\"" << x.url << "\">" << x.title << "</a></h3><div align=\"right\">Score: " << x.score << "</div><p>" << x.content << "</p>\n";
-		// ofs << "<h3><a href=\"" << x.url << "\">" << x.title << "</a></h3><div align=\"right\">Score: " << x.score << "</div><p>" << x.content.substr(0, strend) << "</p>\n";
 	}
 	cout << all.size() << "\n";
-	// cout << all.size() << "\n\n";
 	return 0;
 }
