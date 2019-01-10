@@ -110,8 +110,6 @@ inline ll hit_score(const string &A, const string &B, const int &tolerance)
 
 void parse_to (vector<Record> &parsed, const string &unparsed, const int start, const int end, vector<string> &must, vector<string> &prefer, vector<string> &exclude)
 {
-	if(exclude.empty() && must.empty() && prefer.empty())
-		return;
 	// all records
 	int idx = start;
 	while(idx < end)
@@ -183,6 +181,13 @@ int main(int argc, char ** argv) {
 			args.output = string(argv[++i]);
 		else
 			prefer.emplace_back(string(argv[i]));
+	}
+	if(exclude.empty() && must.empty() && prefer.empty())
+	{
+		ofstream ofs;
+		ofs.open(args.output, ofstream::out);
+		cout << "0\n";
+		return 0;
 	}
 
 	ifstream ifs;
